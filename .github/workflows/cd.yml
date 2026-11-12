@@ -1,0 +1,41 @@
+name: Liberacion y despliegue local
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flask-local
+  cancel-in-progress: false
+jobs:
+  liberar:
+    runs-on: [self-hosted, Windows, X64, ra-flask]
+    timeout-minutes: 15
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generar entorno e imagen
+        run: ./scripts/entorno.ps1
+      - name: Probar version candidata
+        run: ./scripts/pruebas.ps1
+      - name: Desplegar y verificar version
+        run: ./scripts/desplegar.ps1
+      - name: Obtener muestras de monitoreo
+        run: ./scripts/monitorear.ps1 -Muestras 5 -Intervalo 2
+      - name: Mostrar estado y registros
+        if: always()
+        run: |
+          docker compose ps
+          docker compose logs --tail 40
+      - name: Conservar monitoreo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoreo-${{ github.sha }}
+          path: evidencias/monitoreo.csv
+          if-no-files-found: ignore
